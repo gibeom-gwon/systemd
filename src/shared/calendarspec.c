@@ -1233,6 +1233,7 @@ static int find_next(const CalendarSpec *spec, struct tm *tm, usec_t *usec) {
         struct tm c;
         int tm_usec;
         int r;
+        int temp;
 
         /* Returns -ENOENT if the expression is not going to elapse anymore */
 
@@ -1269,6 +1270,7 @@ static int find_next(const CalendarSpec *spec, struct tm *tm, usec_t *usec) {
                         c.tm_mday = 1;
                         c.tm_hour = c.tm_min = c.tm_sec = tm_usec = 0;
                 }
+                temp = c.tm_year;
                 if (r < 0 || (r = tm_within_bounds(&c, spec->utc)) < 0) {
                         c.tm_year++;
                         c.tm_mon = 0;
@@ -1276,20 +1278,27 @@ static int find_next(const CalendarSpec *spec, struct tm *tm, usec_t *usec) {
                         c.tm_hour = c.tm_min = c.tm_sec = tm_usec = 0;
                         continue;
                 }
-                if (r == 0)
+                if (r == 0) {
+                        if (temp != c.tm_year)
+                                c.tm_mon = 0;
                         continue;
+                }
 
                 r = find_matching_component(spec, spec->day, &c, &c.tm_mday);
                 if (r > 0)
                         c.tm_hour = c.tm_min = c.tm_sec = tm_usec = 0;
+                temp = c.tm_mon;
                 if (r < 0 || (r = tm_within_bounds(&c, spec->utc)) < 0) {
                         c.tm_mon++;
                         c.tm_mday = 1;
                         c.tm_hour = c.tm_min = c.tm_sec = tm_usec = 0;
                         continue;
                 }
-                if (r == 0)
+                if (r == 0) {
+                        if (temp != c.tm_mon)
+                                c.tm_mday = 1;
                         continue;
+                }
 
                 if (!matches_weekday(spec->weekdays_bits, &c, spec->utc)) {
                         c.tm_mday++;
@@ -1300,40 +1309,49 @@ static int find_next(const CalendarSpec *spec, struct tm *tm, usec_t *usec) {
                 r = find_matching_component(spec, spec->hour, &c, &c.tm_hour);
                 if (r > 0)
                         c.tm_min = c.tm_sec = tm_usec = 0;
+                temp = c.tm_mday;
                 if (r < 0 || (r = tm_within_bounds(&c, spec->utc)) < 0) {
                         c.tm_mday++;
                         c.tm_hour = c.tm_min = c.tm_sec = tm_usec = 0;
                         continue;
                 }
-                if (r == 0)
-                        /* The next hour we set might be missing if there
-                         * are time zone changes. Let's try again starting at
-                         * normalized time. */
+                if (r == 0) {
+                        if (temp != c.tm_mday)
+                                c.tm_hour = 0;
                         continue;
+                }
 
                 r = find_matching_component(spec, spec->minute, &c, &c.tm_min);
                 if (r > 0)
                         c.tm_sec = tm_usec = 0;
+                temp = c.tm_hour;
                 if (r < 0 || (r = tm_within_bounds(&c, spec->utc)) < 0) {
                         c.tm_hour++;
                         c.tm_min = c.tm_sec = tm_usec = 0;
                         continue;
                 }
-                if (r == 0)
+                if (r == 0) {
+                        if(temp != c.tm_hour)
+                                c.tm_min = 0;
                         continue;
+                }
 
                 c.tm_sec = c.tm_sec * USEC_PER_SEC + tm_usec;
                 r = find_matching_component(spec, spec->microsecond, &c, &c.tm_sec);
                 tm_usec = c.tm_sec % USEC_PER_SEC;
                 c.tm_sec /= USEC_PER_SEC;
 
+                temp = c.tm_min;
                 if (r < 0 || (r = tm_within_bounds(&c, spec->utc)) < 0) {
                         c.tm_min++;
                         c.tm_sec = tm_usec = 0;
                         continue;
                 }
-                if (r == 0)
+                if (r == 0) {
+                        if (temp != c.tm_min)
+                                c.tm_sec = tm_usec = 0;
                         continue;
+                }
 
                 *tm = c;
                 *usec = tm_usec;
